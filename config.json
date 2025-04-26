@@ -1,0 +1,4 @@
+{
+  "logging-services": [8001, 8002, 8003],
+  "message-service": [9001, 9002]
+}

@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package facade;
+
+message WriteRequest {
+  string message = 1;
+}
+
+message MessageRequest {
+  string message = 1;
+}
+
+message LogResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ShowRequest {}
+
+message GetResponse {
+  repeated string messages = 1;
+}
+
+service FacadeService {
+  rpc WriteMessage(WriteRequest) returns (LogResponse);
+  rpc ShowMessages(ShowRequest) returns (GetResponse);
+}
