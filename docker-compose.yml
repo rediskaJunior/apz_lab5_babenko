@@ -1,0 +1,229 @@
+version: '3.8'
+
+services:
+  # Consul Service (Centralized Service Discovery)
+  consul:
+    image: hashicorp/consul:latest
+    container_name: consul
+    ports:
+      - "8500:8500"   # Consul Web UI
+      - "8600:8600/udp" # DNS
+    command: agent -dev -client=0.0.0.0
+    networks:
+      - microservices-network
+
+  register-names:
+    image: alpine
+    entrypoint: ["/bin/sh", "-c", "
+        apk add --no-cache curl netcat-openbsd;
+        while ! nc -z consul 8500; do
+          echo 'Waiting for Consul...';
+          sleep 1;
+        done;
+        echo 'Consul is up!';
+        curl --request PUT --data 'dev' http://consul:8500/v1/kv/hazelcast_cluster_name;
+        curl --request PUT --data 'message-queue' http://consul:8500/v1/kv/queue_name;
+      "]
+    depends_on:
+      - consul
+    networks:
+      - microservices-network
+
+  # Hazelcast Instances
+  hazelcast1:
+    image: hazelcast/hazelcast:latest
+    container_name: hazelcast1
+    hostname: hazelcast1
+    ports:
+      - "5701:5701"
+    entrypoint: ["/bin/sh", "-c", "
+        while ! nc -z consul 8500; do
+          echo 'Waiting for Consul...';
+          sleep 1;
+        done;
+        echo 'Consul is up!';
+        curl --request PUT --data 'hazelcast1' http://consul:8500/v1/kv/hazelcast/nodes/node1;
+        exec /opt/hazelcast/bin/hz-start
+      "]
+    networks:
+      - microservices-network
+
+  hazelcast2:
+    image: hazelcast/hazelcast:latest
+    container_name: hazelcast2
+    hostname: hazelcast2
+    ports:
+      - "5702:5701"
+    entrypoint: ["/bin/sh", "-c", "
+        while ! nc -z consul 8500; do
+          echo 'Waiting for Consul...';
+          sleep 1;
+        done;
+        echo 'Consul is up!';
+        curl --request PUT --data 'hazelcast2' http://consul:8500/v1/kv/hazelcast/nodes/node2;
+        exec /opt/hazelcast/bin/hz-start
+      "]
+    networks:
+      - microservices-network
+
+  hazelcast3:
+    image: hazelcast/hazelcast:latest
+    container_name: hazelcast3
+    hostname: hazelcast3   
+    ports:
+      - "5703:5701"
+    entrypoint: ["/bin/sh", "-c", "
+        while ! nc -z consul 8500; do
+          echo 'Waiting for Consul...';
+          sleep 1;
+        done;
+        echo 'Consul is up!';
+        curl --request PUT --data 'hazelcast3' http://consul:8500/v1/kv/hazelcast/nodes/node3;
+        exec /opt/hazelcast/bin/hz-start
+      "]
+    networks:
+      - microservices-network
+
+  # Logging Services (2 instances)
+  logging-service1:
+    build:
+      context: ./logging-service
+    container_name: logging-service1
+    environment:
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - PORT=8081
+      - FLASK_PORT=10081   # Separate Flask HTTP port for logging service
+      - HAZELCAST_ADRESS_KEY=hazelcast
+      - HAZELCAST_CLUSTER_NAME_KEY=hazelcast_cluster_name
+      - QUEUE_NAME_KEY=queue_name
+      - WAIT_TO_START=10
+    depends_on:
+      - consul
+      - hazelcast1
+      - hazelcast2
+      - hazelcast3
+    networks:
+      - microservices-network
+    ports:
+      - "8081:50051"  # Expose gRPC port for logging service
+      - "10081:10081"   # Expose HTTP port (Flask) for logging service
+
+  logging-service2:
+    build:
+      context: ./logging-service
+    container_name: logging-service2
+    environment:
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - PORT=8082
+      - FLASK_PORT=10082   # Separate Flask HTTP port for logging service
+      - HAZELCAST_ADRESS_KEY=hazelcast
+      - HAZELCAST_CLUSTER_NAME_KEY=hazelcast_cluster_name
+      - QUEUE_NAME_KEY=queue_name
+      - WAIT_TO_START=10
+    depends_on:
+      - consul
+      - hazelcast1
+      - hazelcast2
+      - hazelcast3
+    networks:
+      - microservices-network
+    ports:
+      - "8082:50051"  # Expose gRPC port for logging service
+      - "10082:10082"   # Expose HTTP port (Flask) for logging service
+
+  # Messages Services (2 instances)
+  messages-service1:
+    build:
+      context: ./messages-service
+    container_name: messages-service1
+    environment:
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - PORT=9091
+      - FLASK_PORT=10091   # Separate Flask HTTP port for messages service
+      - HAZELCAST_ADRESS_KEY=hazelcast
+      - HAZELCAST_CLUSTER_NAME_KEY=hazelcast_cluster_name
+      - QUEUE_NAME_KEY=queue_name
+      - WAIT_TO_START=10
+    depends_on:
+      - consul
+      - hazelcast1
+      - hazelcast2
+      - hazelcast3
+    networks:
+      - microservices-network
+    ports:
+      - "9091:50052"  # Expose gRPC port for messages service
+      - "10091:10091"   # Expose HTTP port (Flask) for messages service
+
+  messages-service2:
+    build:
+      context: ./messages-service
+    container_name: messages-service2
+    environment:
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - PORT=9092
+      - FLASK_PORT=10092   # Separate Flask HTTP port for messages service
+      - HAZELCAST_ADRESS_KEY=hazelcast
+      - HAZELCAST_CLUSTER_NAME_KEY=hazelcast_cluster_name
+      - QUEUE_NAME_KEY=queue_name
+      - WAIT_TO_START=10
+    depends_on:
+      - consul
+      - hazelcast1
+      - hazelcast2
+      - hazelcast3
+    networks:
+      - microservices-network
+    ports:
+      - "9092:50052"  # Expose gRPC port for messages service
+      - "10092:10092"   # Expose HTTP port (Flask) for messages service
+
+  # Facade Services (2 instances)
+  facade-service1:
+    build:
+      context: ./facade-service
+    container_name: facade-service1
+    environment:
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - PORT=50051
+      - FLASK_PORT=10051   # Separate Flask HTTP port for facade service
+      - WAIT_TO_START=10
+    depends_on:
+      - logging-service1
+      - messages-service1
+      - consul
+    networks:
+      - microservices-network
+    ports:
+      - "50051:50051"  # Expose gRPC port for facade service
+      - "10051:10051"    # Expose HTTP port (Flask) for facade service
+
+  facade-service2:
+    build:
+      context: ./facade-service
+    container_name: facade-service2
+    environment:
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - PORT=50052
+      - FLASK_PORT=10052   # Separate Flask HTTP port for facade service
+      - WAIT_TO_START=10
+    depends_on:
+      - logging-service2
+      - messages-service2
+      - consul
+    networks:
+      - microservices-network
+    ports:
+      - "50052:50052"  # Expose gRPC port for facade service
+      - "10052:10052"    # Expose HTTP port (Flask) for facade service
+
+networks:
+  microservices-network:
+    driver: bridge
+

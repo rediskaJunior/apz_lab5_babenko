@@ -1,0 +1,26 @@
+Deregister all services in consul
+for service in $(curl -s http://localhost:8500/v1/catalog/services | jq -r 'keys[]'); do
+    echo "Deregistering service: $service"
+    
+    # Get the list of service instances (IDs) for each service
+    service_ids=$(curl -s http://localhost:8500/v1/catalog/service/$service | jq -r '.[].ServiceID')
+    
+    # Deregister each service instance by its ID
+    for service_id in $service_ids; do
+        echo "Deregistering service ID: $service_id"
+        curl --request PUT --data '{"service": "'$service_id'"}' http://localhost:8500/v1/agent/service/deregister/$service_id
+    done
+done
+// section end
+
+How to run scripts for correct work (Optional env variable WAIT_TO_START. WAIT_TO_START correspond to timeout before start app and is set to 5 by default)
+
+FLASK_PORT={flask_port_number} PORT={service_port_number} CONSUL_HOST={consul_host} CONSUL_PORT={consul_port} python3 path_to_script(./facade.py )
+Example:
+FLASK_PORT=20 PORT=30 CONSUL_HOST="consul" CONSUL_PORT=8500 python3 ./facade.py 
+
+FLASK_PORT={flask_port_number} PORT={service_port_number} CONSUL_HOST={consul_host} CONSUL_PORT={consul_port} HAZELCAST_ADRESS_KEY={hazelcast_address_key} HAZELCAST_CLUSTER_NAME_KEY={hazelcast_cluster_name_key} QUEUE_NAME_KEY={que_name_key} python3 path_to_script(./logger.py, ./messages.py )
+Examples:
+FLASK_PORT=20 PORT=30 CONSUL_HOST="consul" CONSUL_PORT=8500 HAZELCAST_ADRESS_KEY="hazelcast" HAZELCAST_CLUSTER_NAME_KEY="hazelcast_claster" QUEUE_NAME_KEY="queue_name" python3 ./logger.py 
+FLASK_PORT=20 PORT=30 CONSUL_HOST="consul" CONSUL_PORT=8500 HAZELCAST_ADRESS_KEY="hazelcast" HAZELCAST_CLUSTER_NAME_KEY="hazelcast_claster" QUEUE_NAME_KEY="queue_name" python3 ./messages.py 
+// section end
